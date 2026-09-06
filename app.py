@@ -1,55 +1,41 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
 from datetime import datetime
+from supabase import create_client, Client
 
 # Page configuration
 st.set_page_config(page_title="Session & Fee Tracker", page_icon="🏸", layout="centered")
 
-# --- DATABASE SETUP ---
-def init_db():
-    conn = sqlite3.connect("tracker.db")
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS records (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            amount REAL NOT NULL,
-            date_logged TEXT NOT NULL
-        )
-    """)
-    conn.commit()
-    conn.close()
+# --- SUPABASE CONNECTION ---
+@st.cache_resource
+def get_supabase_client() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
 
-def add_record(name, amount, date_logged):
-    conn = sqlite3.connect("tracker.db")
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT INTO records (name, amount, date_logged) VALUES (?, ?, ?)",
-        (name, amount, date_logged)
-    )
-    conn.commit()
-    conn.close()
+supabase = get_supabase_client()
 
-def delete_record(record_id):
-    conn = sqlite3.connect("tracker.db")
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM records WHERE id = ?", (record_id,))
-    conn.commit()
-    conn.close()
+# --- DATABASE CRUD HELPERS ---
+def add_record(name: str, amount: float, date_logged: str):
+    supabase.table("records").insert({
+        "name": name,
+        "amount": amount,
+        "date_logged": date_logged
+    }).execute()
 
-def fetch_records():
-    conn = sqlite3.connect("tracker.db")
-    df = pd.read_sql_query("SELECT id, name, amount, date_logged FROM records ORDER BY id DESC", conn)
-    conn.close()
-    return df
+def delete_record(record_id: int):
+    supabase.table("records").delete().eq("id", record_id).execute()
 
-# Initialize database table
-init_db()
+def fetch_records() -> pd.DataFrame:
+    response = supabase.table("records").select("id, name, amount, date_logged").order("id", desc=True).execute()
+    data = response.data
+    if data:
+        return pd.DataFrame(data)
+    return pd.DataFrame(columns=["id", "name", "amount", "date_logged"])
 
 # --- UI HEADER ---
 st.title("🏸 Session & Fee Tracker")
-st.caption("A database tool to track payments, sessions, and records.")
+st.caption("A cloud database tool to track payments, sessions, and records.")
 
 # --- FORM: ADD RECORD ---
 with st.form("entry_form", clear_on_submit=True):
@@ -74,7 +60,7 @@ df = fetch_records()
 
 # --- KPI METRICS ---
 col_m1, col_m2 = st.columns(2)
-total_collected = df["amount"].sum() if not df.empty else 0.0
+total_collected = float(df["amount"].sum()) if not df.empty else 0.0
 total_entries = len(df)
 
 col_m1.metric("Total Collected", f"${total_collected:,.2f}")
@@ -107,7 +93,7 @@ if not df.empty:
     col_export, col_delete = st.columns([1, 1])
 
     with col_export:
-        csv_data = filtered_df.to_csv(index=False).encode('utf-8')
+        csv_data = filtered_df.to_csv(index=False).encode("utf-8")
         st.download_button(
             label="📥 Download CSV",
             data=csv_data,
@@ -118,8 +104,7 @@ if not df.empty:
 
     with col_delete:
         with st.expander("🗑️ Delete a Record"):
-            # Create a clean label for each record to show in dropdown
-            options = {f"ID {row['id']} - {row['name']} (${row['amount']:.2f})": row['id'] for _, row in df.iterrows()}
+            options = {f"ID {row['id']} - {row['name']} (${float(row['amount']):.2f})": int(row["id"]) for _, row in df.iterrows()}
             selected_label = st.selectbox("Select record to delete", list(options.keys()))
             
             if st.button("Confirm Delete", type="primary", use_container_width=True):
