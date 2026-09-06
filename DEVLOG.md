@@ -29,3 +29,19 @@
   - Connect the app to a persistent external cloud database (e.g., Supabase / hosted PostgreSQL) so cloud data survives container restarts.
   - Add search/filtering by member name and date range.
   - Implement a delete/edit record action for data hygiene.
+
+### [2026-09-06] Day 2: Feature Upgrades & Supabase Cloud Migration
+
+### Key Accomplishments
+* **UI & Data Features:** Added search filtering by member name, one-click CSV export, and safe row deletion using Streamlit selectboxes.
+* **Cloud Database Migration:** Replaced local SQLite with hosted PostgreSQL on **Supabase** (Oceania / Sydney region). Data is now permanently stored in the cloud.
+* **Secrets Management:** Kept credentials safe by adding `.streamlit/secrets.toml` to `.gitignore` and configuring encrypted production keys inside Streamlit Community Cloud.
+* **Live Deployment:** Successfully deployed and verified end-to-end cloud sync on `jayce-session-tracker.streamlit.app`.
+
+### Issues Resolved
+* **DNS Resolution Error (`[Errno 8]`):** Fixed an `httpx.ConnectError` caused by a single-character typo in the Supabase project subdomain in `secrets.toml`. Verified connection with `curl` after correcting the URL.
+
+### Next Steps (Day 3)
+* Add record edit/update functionality.
+* Add data visualizations (spending breakdown, timeline trends).
+* Add custom date selection for logging past sessions.
